@@ -21,12 +21,12 @@ let phoneBook = {
         number:"770-977-3557"
     }
 };
-let search = function search(query, target){
+let search = (query, target) => {
     let results = [];
     if (!query){
         return target;
     }
-    Object.values(target).forEach(function(entry){
+    Object.values(target).forEach((entry) => {
         for (let value  of Object.values(entry)){
             if (foldCase(String(value)).includes(foldCase(String(query)))){
                 results.push(entry);
@@ -39,7 +39,7 @@ let search = function search(query, target){
     }
     return results;
 };
-let server = http.createServer(function(request, response){
+let server = http.createServer((request, response) => {
     const router = {"GET":search};
     if (request.url.startsWith(root)) {
         let searchQuery = request.url.replace(root,"").replace("/","");
