@@ -1,0 +1,83 @@
+#! /usr/bin/env node
+
+const FS = require("fs");
+const ReadLine = require("readline");
+const Promisify = require("util").promisify;
+const RL = ReadLine.createInterface({
+    input: process.stdin,
+    output: process.stdout
+});
+const Question = function(question) {
+    return new Promise(function(resolve) {
+        RL.question(question, resolve);
+    });
+};
+
+let readPhoneBook = function readPhoneBook(filePath){
+    return new Promise(function (resolve, reject){
+        FS.readFile(filePath, function(err, phoneBookData){
+            if (err){
+                if (err.code === "ENOENT"){
+                    FS.writeFile(filePath,"",function (){
+                        readPhoneBook(filePath);
+                    });
+                }
+                else {reject(err);}
+            }
+            resolve(JSON.stringify(phoneBookData));
+        });
+    });
+}
+
+let searchMenu = function searchMenu(phoneBook){
+    return new Promise(function(resolve, reject){
+        const searchMenuText = "Searching the Phonebook\n"+
+                           "Please Enter a search term";
+        Question(searchMenuText).then(function(searchQuery){
+            if (phoneBook[searchQuery] !== phoneBook){
+                resolve(phoneBook[searchQuery]);
+            }
+            else{
+                for (let entry of phoneBook){
+                    if (searchQuery in Object.values(entry)){
+                        resolve(entry);
+                    }
+                }
+                reject(searchQuery);
+            }
+        })
+    })
+}
+let mainMenu = function mainMenu(phoneBook){
+    if (phoneBook === undefined){
+        readPhoneBook.then(mainMenu);
+    }
+    const MainMenuText = "Welcome to the PhoneBook.\n"+
+                         "Please Select an option from the choices below\n"+
+                         "1: Search for a contact\n"+
+                         "2: Add a contact\n"+
+                         "3: Remove a contact\n"+
+                         "4: List all contacts\n"+
+                         "5: Terminate Program";
+    Question(MainMenuText).then(function(response){
+        if (response === "1"){
+            searchMenu(phoneBook).then(mainMenu);
+        }
+        else if (response === "2"){
+            addMenu(phoneBook).then(mainMenu);
+        }
+        else if (respone === "3"){
+            removeMenu(phoneBook).then(mainMenu);
+        }
+        else if (response === "4"){
+            listAll(phoneBook).then(mainMenu);
+        }
+        else if (response === "5"){
+            RL.close();
+        }
+        else {
+            throw new Error("Unexpecteted Input");
+        }
+    });
+
+};

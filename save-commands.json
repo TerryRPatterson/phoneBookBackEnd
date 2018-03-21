@@ -1,0 +1,7 @@
+{
+  "commands": [
+    "*.s[ac]ss : sass {absPath}{filename} {absPath}{name}.css",
+    "* : chmod u+x {absPath}{filename}",
+    "*: envDeclaration {absPath}{filename}"
+  ]
+}

@@ -1,0 +1,11 @@
+
+module my-chronyhelper 1.0;
+
+require {
+	type user_home_dir_t;
+	type chronyd_t;
+	class dir search;
+}
+
+#============= chronyd_t ==============
+allow chronyd_t user_home_dir_t:dir search;

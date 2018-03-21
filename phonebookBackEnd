@@ -1,0 +1,53 @@
+#! /usr/bin/env node
+
+const http = require("http");
+
+const uuidv4 = require("uuid/v4");
+
+const foldCase = require("fold-case");
+const root = "/contacts";
+
+let phoneBook = {
+    0:{
+        id:0,
+        name:"ẞerry",
+        email:"Terryp@wegrok.net",
+        number:"678-383-7780"
+    },
+    1:{
+        id:1,
+        name:"Terry",
+        email:"Terryp@wegrok.net",
+        number:"770-977-3557"
+    }
+};
+let search = function search(query, target){
+    let results = [];
+    if (!query){
+        return target;
+    }
+    Object.values(target).forEach(function(entry){
+        for (let value  of Object.values(entry)){
+            if (foldCase(String(value)).includes(foldCase(String(query)))){
+                results.push(entry);
+                break;
+            }
+        }
+    });
+    if (results.length === 1){
+        return results[0];
+    }
+    return results;
+};
+let server = http.createServer(function(request, response){
+    const router = {"GET":search};
+    if (request.url.startsWith(root)) {
+        let searchQuery = request.url.replace(root,"").replace("/","");
+        response.end(JSON.stringify(
+            router[request.method](searchQuery, phoneBook)));
+    }
+    else {
+        response.end("This content is not available in your country");
+    }
+});
+server.listen(3000);

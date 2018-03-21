@@ -1,0 +1,5 @@
+#! /usr/bin/env node
+
+let phoneBook = require("./phoneBook");
+
+phoneBook();
