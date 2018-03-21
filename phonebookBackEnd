@@ -39,12 +39,38 @@ let search = (query, target) => {
     }
     return results;
 };
+let newContact = (id=uuidv4(), target, request, response) => {
+    let body = "";
+    //remove id check and support for setting an id eventually
+    if (Object.keys(target).includes(id)){
+        response.statusCode = 422;
+        response.end("Contact already exists if you want to update a"+
+        " contact please use PUT request");
+    }
+
+    request.on("data", (partialBody) => {
+        body += partialBody;
+    });
+    request.on("end", () => {
+        try{
+            console.log(body);
+            JSON.parse(body);
+        }
+        catch (error){
+            console.log("caught");
+                response.statusCode = 422;
+                response.end("Invaild JSON received.");
+        }
+    });
+};
 let server = http.createServer((request, response) => {
-    const router = {"GET":search};
+    const router = {"GET":search,
+        "POST":newContact};
     if (request.url.startsWith(root)) {
-        let searchQuery = request.url.replace(root,"").replace("/","");
+        let parameter = request.url.replace(root,"").replace("/","");
+        parameter = parameter ? parameter : undefined;
         response.end(JSON.stringify(
-            router[request.method](searchQuery, phoneBook)));
+            router[request.method](parameter, phoneBook, request, response)));
     }
     else {
         response.end("This content is not available in your country");
