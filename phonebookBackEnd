@@ -5,7 +5,9 @@ const http = require("http");
 const uuidv4 = require("uuid/v4");
 
 const foldCase = require("fold-case");
-const root = "/contacts";
+
+const urlRegex = /^\/contacts(?:\/[0-9]{1,8}\/?)?$/i;
+//    /^\/contacts(?:\/([a-f0-9]{8}-([a-f0-9]{4}-){3}[a-f0-9]{12})\/?)?$/i;
 
 let phoneBook = {
     0:{
@@ -22,57 +24,76 @@ let phoneBook = {
     }
 };
 let search = (query, target) => {
-    let results = [];
-    if (!query){
-        return target;
-    }
-    Object.values(target).forEach((entry) => {
-        for (let value  of Object.values(entry)){
-            if (foldCase(String(value)).includes(foldCase(String(query)))){
-                results.push(entry);
-                break;
+    return new Promise((resolve) =>{
+        let results = [];
+        if (!query){
+            resolve(target);
+        }
+        Object.values(target).forEach((entry) => {
+            for (let value  of Object.values(entry)){
+                if (foldCase(String(value)).includes(foldCase(String(query)))){
+                    results.push(entry);
+                    break;
+                }
             }
+        });
+        if (results.length === 1){
+            resolve(results[0]);
         }
+        resolve(results);
     });
-    if (results.length === 1){
-        return results[0];
-    }
-    return results;
 };
-let newContact = (id=uuidv4(), target, request, response) => {
-    let body = "";
-    //remove id check and support for setting an id eventually
-    if (Object.keys(target).includes(id)){
-        response.statusCode = 422;
-        response.end("Contact already exists if you want to update a"+
-        " contact please use PUT request");
-    }
+let newContact = (id=uuidv4(), target, request) => {
+    return new Promise((resolve, reject) => {
+        let body = "";
+        let contact = "";
+        //remove id check and support for setting an id eventually
+        if (Object.keys(target).includes(id)){
+            reject({ statusCode:422,
+                message:"Contact already exists if you want to update a"+
+                " contact please use PUT request"});
+        }
 
-    request.on("data", (partialBody) => {
-        body += partialBody;
-    });
-    request.on("end", () => {
-        try{
-            console.log(body);
-            JSON.parse(body);
-        }
-        catch (error){
-            console.log("caught");
-                response.statusCode = 422;
-                response.end("Invaild JSON received.");
-        }
+
+        request.on("data", (partialBody) => {
+            body += partialBody;
+        });
+        request.on("end", () => {
+            try{
+                contact = JSON.parse(body);
+                contact["id"] = id;
+                target[id] = contact;
+                resolve(target);
+            }
+            catch (error){
+                if (error.name === "SyntaxError"){
+                    error.statusCode = 400;
+                    error.message = "Invaild JSON received.";
+                    reject(error);
+                }
+            }
+        });
+
     });
 };
 let server = http.createServer((request, response) => {
     const router = {"GET":search,
         "POST":newContact};
-    if (request.url.startsWith(root)) {
-        let parameter = request.url.replace(root,"").replace("/","");
+    if (urlRegex.test(request.url)) {
+        let parameter = request.url.match(urlRegex)[1];
+        console.log(parameter);
         parameter = parameter ? parameter : undefined;
-        response.end(JSON.stringify(
-            router[request.method](parameter, phoneBook, request, response)));
+        router[request.method](parameter, phoneBook, request, response).then(
+            (data) => {
+                phoneBook = data;
+                response.end(JSON.stringify(phoneBook));})
+            .catch((error) =>{
+                response.statusCode = error.statusCode;
+                response.end(error.message);
+            });
     }
     else {
+        response.statusCode = 404;
         response.end("This content is not available in your country");
     }
 });
