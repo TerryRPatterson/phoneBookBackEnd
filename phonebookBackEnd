@@ -115,35 +115,35 @@ let newContact = (id, target, request) => {
             reject({statusCode:405,
                 message:"POST requests cannot accepts ids"+
                 " please use PUT to update contacts"});
-        id = uuidv4();
-        if (Object.keys(target).includes(id)){
-            reject({ statusCode:418,
-                message:"Hell has frozen over uuidv4 generate a repeated id"});
-        }
-
-
-        request.on("data", (partialBody) => {
-            body += partialBody;
-        });
-        request.on("end", () => {
-            try{
-                contact = JSON.parse(body);
-                contact["id"] = id;
-                target[id] = contact;
-                resolve({
-                    updatedPhonebook:target,
-                    response:target
-                });
+            id = uuidv4();
+            if (Object.keys(target).includes(id)){
+                reject({ statusCode:418,
+                    message:"Hell has frozen over uuidv4 generate a repeated id"});
             }
-            catch (error){
-                if (error.name === "SyntaxError"){
-                    error.statusCode = 400;
-                    error.message = "Invaild JSON received.";
-                    reject(error);
+
+
+            request.on("data", (partialBody) => {
+                body += partialBody;
+            });
+            request.on("end", () => {
+                try{
+                    contact = JSON.parse(body);
+                    contact["id"] = id;
+                    target[id] = contact;
+                    resolve({
+                        updatedPhonebook:target,
+                        response:target
+                    });
                 }
-            }
-        });
-
+                catch (error){
+                    if (error.name === "SyntaxError"){
+                        error.statusCode = 400;
+                        error.message = "Invaild JSON received.";
+                        reject(error);
+                    }
+                }
+            });
+        }
     });
 };
 
