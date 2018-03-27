@@ -1,34 +1,26 @@
 #! /usr/bin/env node
 
 const http = require("http");
-
 const uuidv4 = require("uuid/v4");
-
 const foldCase = require("fold-case");
-
-const idRegex = /[0-9]{1,8}/i;
-//    /[a-f0-9]{8}-([a-f0-9]{4}-){3}[a-f0-9]{12}/i;
+const idRegex = /^[a-f0-9]{8}-([a-f0-9]{4}-){3}[a-f0-9]{12}$/i;
 const rootAPIUrl = "/contacts";
-
 const userFacingDirectory = "userFacingFiles";
-
 const fs = require("fs");
-
 const {promisify} = require("util");
-
 const readdir = promisify(fs.readdir);
-
 const stat = promisify(fs.stat);
+const landingPage = "userFacingFiles/index.html";
 
 let phoneBook = {
-    0:{
-        id:0,
+    "7030239b-d837-47c6-82e4-e0b59b68d462":{
+        id:"7030239b-d837-47c6-82e4-e0b59b68d462",
         name:"ẞerry",
         email:"Terryp@wegrok.net",
         phone:"678-383-7780"
     },
-    1:{
-        id:1,
+    "352e0b16-5615-4227-83b0-85973ce30b5b":{
+        id:"352e0b16-5615-4227-83b0-85973ce30b5b",
         name:"Terry",
         email:"Terryp@wegrok.net",
         phone:"770-977-3557"
@@ -45,6 +37,7 @@ let populateAuthedFiles = (authedFiles = [],
                     if (stats.isFile()){
                         authedFiles.push(startingPath + entry);
                     }
+
                     else {
                         populateAuthedFiles(authedFiles, startingPath + entry + "/")
                             .then((moreAuthedFiles) =>{
@@ -67,6 +60,7 @@ let search = (query, target) => {
                 response:target}
             );
         }
+
         Object.values(target).forEach((entry) => {
             for (let value  of Object.values(entry)){
                 if (foldCase(String(value)).includes(foldCase(String(query)))){
@@ -75,6 +69,7 @@ let search = (query, target) => {
                 }
             }
         });
+
         if (results.length === 1){
             resolve({
                 updatedPhonebook:target,
@@ -91,6 +86,7 @@ let search = (query, target) => {
 let deleteContact = (id, target) => {
     return new Promise((resolve, reject) =>{
         if (idRegex.test(id)){
+
             if (target.hasOwnProperty(id)){
                 delete target[id];
                 resolve({
@@ -98,10 +94,12 @@ let deleteContact = (id, target) => {
                     response:target
                 });
             }
+
             else {
                 reject({statusCode:404,
                     message:"Contact not found"});
             }
+
         }else{
             reject({statusCode:400,
                 message:"Invaild contact id"});
@@ -109,15 +107,18 @@ let deleteContact = (id, target) => {
     });
 };
 
-let newContact = (id=uuidv4(), target, request) => {
+let newContact = (id, target, request) => {
     return new Promise((resolve, reject) => {
         let body = "";
         let contact = "";
-        //remove id check and support for setting an id eventually
+        if (id){
+            reject({statusCode:405,
+                message:"POST requests cannot accepts ids"+
+                " please use PUT to update contacts"});
+        id = uuidv4();
         if (Object.keys(target).includes(id)){
-            reject({ statusCode:422,
-                message:"Contact already exists if you want to update a"+
-                " contact please use PUT request"});
+            reject({ statusCode:418,
+                message:"Hell has frozen over uuidv4 generate a repeated id"});
         }
 
 
@@ -182,12 +183,20 @@ let updateContact = (id, target, request) => {
         }
     });
 };
+
 let server = http.createServer((request, response) => {
     const router = {"GET":search,
         "POST":newContact,
         "DELETE":deleteContact,
         "PUT":updateContact};
-    if (request.url.startsWith(rootAPIUrl)) {
+
+    if (request.url === "/"){
+        fs.readFile(landingPage, "utf8", (err, data) => {
+            response.end(data);
+        });
+    }
+
+    else if (request.url.startsWith(rootAPIUrl)) {
         let parameter = request.url.replace(rootAPIUrl, "").replace("/","");
         parameter = parameter ? parameter : undefined;
         router[request.method](parameter, phoneBook, request, response).then(
@@ -199,12 +208,14 @@ let server = http.createServer((request, response) => {
                 response.end(error.message);
             });
     }
+
     else if (server.authedFiles.includes(
         `${userFacingDirectory}${request.url}`)){
         fs.readFile(`userFacingFiles${request.url}`,"utf8",(err,data) => {
             response.end(data);
         });
     }
+
     else {
         response.statusCode = 404;
         response.end(`Woops ${request.url} doesn't exits.`);
