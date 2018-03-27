@@ -6,28 +6,66 @@ const uuidv4 = require("uuid/v4");
 
 const foldCase = require("fold-case");
 
-const urlRegex = /^\/contacts(?:\/[0-9]{1,8}\/?)?$/i;
-//    /^\/contacts(?:\/([a-f0-9]{8}-([a-f0-9]{4}-){3}[a-f0-9]{12})\/?)?$/i;
+const idRegex = /[0-9]{1,8}/i;
+//    /[a-f0-9]{8}-([a-f0-9]{4}-){3}[a-f0-9]{12}/i;
+const rootAPIUrl = "/contacts";
+
+const userFacingDirectory = "userFacingFiles";
+
+const fs = require("fs");
+
+const {promisify} = require("util");
+
+const readdir = promisify(fs.readdir);
+
+const stat = promisify(fs.stat);
 
 let phoneBook = {
     0:{
         id:0,
         name:"ẞerry",
         email:"Terryp@wegrok.net",
-        number:"678-383-7780"
+        phone:"678-383-7780"
     },
     1:{
         id:1,
         name:"Terry",
         email:"Terryp@wegrok.net",
-        number:"770-977-3557"
+        phone:"770-977-3557"
     }
 };
+
+let populateAuthedFiles = (authedFiles = [],
+    startingPath=`${userFacingDirectory}/`) => {
+    return new Promise((resolve) => {
+
+        readdir(startingPath).then((readFiles) => {
+            readFiles.forEach((entry) =>{
+                stat(startingPath + entry).then((stats) => {
+                    if (stats.isFile()){
+                        authedFiles.push(startingPath + entry);
+                    }
+                    else {
+                        populateAuthedFiles(authedFiles, startingPath + entry + "/")
+                            .then((moreAuthedFiles) =>{
+                                authedFiles = authedFiles.concat(moreAuthedFiles);
+                            });
+                    }
+                });
+            });
+            resolve(authedFiles);
+        });
+    });
+};
+
 let search = (query, target) => {
     return new Promise((resolve) =>{
         let results = [];
         if (!query){
-            resolve(target);
+            resolve({
+                updatedPhonebook:target,
+                response:target}
+            );
         }
         Object.values(target).forEach((entry) => {
             for (let value  of Object.values(entry)){
@@ -38,11 +76,39 @@ let search = (query, target) => {
             }
         });
         if (results.length === 1){
-            resolve(results[0]);
+            resolve({
+                updatedPhonebook:target,
+                response:results[0]
+            });
         }
-        resolve(results);
+        resolve({
+            updatedPhonebook:target,
+            response:results
+        });
     });
 };
+
+let deleteContact = (id, target) => {
+    return new Promise((resolve, reject) =>{
+        if (idRegex.test(id)){
+            if (target.hasOwnProperty(id)){
+                delete target[id];
+                resolve({
+                    updatedPhonebook:target,
+                    response:target
+                });
+            }
+            else {
+                reject({statusCode:404,
+                    message:"Contact not found"});
+            }
+        }else{
+            reject({statusCode:400,
+                message:"Invaild contact id"});
+        }
+    });
+};
+
 let newContact = (id=uuidv4(), target, request) => {
     return new Promise((resolve, reject) => {
         let body = "";
@@ -63,7 +129,10 @@ let newContact = (id=uuidv4(), target, request) => {
                 contact = JSON.parse(body);
                 contact["id"] = id;
                 target[id] = contact;
-                resolve(target);
+                resolve({
+                    updatedPhonebook:target,
+                    response:target
+                });
             }
             catch (error){
                 if (error.name === "SyntaxError"){
@@ -76,25 +145,73 @@ let newContact = (id=uuidv4(), target, request) => {
 
     });
 };
+
+let updateContact = (id, target, request) => {
+    return new Promise((resolve, reject) => {
+        let body = "";
+        if (idRegex.test(id)){
+            if (target.hasOwnProperty(id)){
+
+                request.on("data", (partialBody) => {
+                    body += partialBody;
+                });
+                request.on("end", () => {
+                    try {
+                        let contact = JSON.parse(body);
+                        target[id] = Object.assign(target[id], contact);
+                        resolve({
+                            updatedPhonebook:target,
+                            response:target
+                        });
+                    }
+                    catch (error){
+                        if (error.name === "SyntaxError"){
+                            error.statusCode = 400;
+                            error.message = "Invaild JSON received.";
+                            reject(error);
+                        }
+                    }
+                });
+            }else {
+                reject({statusCode:404,
+                    message:"Contact not found"});
+            }
+        }else{
+            reject({statusCode:400,
+                message:"Invaild contact id"});
+        }
+    });
+};
 let server = http.createServer((request, response) => {
     const router = {"GET":search,
-        "POST":newContact};
-    if (urlRegex.test(request.url)) {
-        let parameter = request.url.match(urlRegex)[1];
-        console.log(parameter);
+        "POST":newContact,
+        "DELETE":deleteContact,
+        "PUT":updateContact};
+    if (request.url.startsWith(rootAPIUrl)) {
+        let parameter = request.url.replace(rootAPIUrl, "").replace("/","");
         parameter = parameter ? parameter : undefined;
         router[request.method](parameter, phoneBook, request, response).then(
             (data) => {
-                phoneBook = data;
-                response.end(JSON.stringify(phoneBook));})
+                phoneBook = data["updatedPhonebook"];
+                response.end(JSON.stringify(data["response"]));})
             .catch((error) =>{
                 response.statusCode = error.statusCode;
                 response.end(error.message);
             });
     }
+    else if (server.authedFiles.includes(
+        `${userFacingDirectory}${request.url}`)){
+        fs.readFile(`userFacingFiles${request.url}`,"utf8",(err,data) => {
+            response.end(data);
+        });
+    }
     else {
         response.statusCode = 404;
-        response.end("This content is not available in your country");
+        response.end(`Woops ${request.url} doesn't exits.`);
     }
 });
-server.listen(3000);
+
+populateAuthedFiles().then((authedFiles) => {
+    server.authedFiles = authedFiles;
+    server.listen(3000);
+});
